@@ -199,6 +199,7 @@ list(APPEND legate_core_SOURCES
   src/core/runtime/projection.cc
   src/core/runtime/runtime.cc
   src/core/runtime/shard.cc
+  src/core/runtime/compose.cc
   src/core/task/registrar.cc
   src/core/task/return.cc
   src/core/task/task.cc
@@ -223,7 +224,8 @@ endif()
 if(Legion_USE_CUDA)
   list(APPEND legate_core_SOURCES
     src/core/comm/comm_nccl.cu
-    src/core/cuda/stream_pool.cu)
+    src/core/cuda/stream_pool.cu
+    src/core/runtime/compose.cu)
 endif()
 
 add_library(legate_core ${legate_core_SOURCES})
@@ -316,6 +318,7 @@ if (legate_core_BUILD_DOCS)
       src/core/data/allocator.h
       # runtime
       src/core/runtime/runtime.h
+      src/core/runtime/compose.h
       src/core/runtime/runtime.inl
       src/core/runtime/context.h
       # mapping
@@ -402,6 +405,7 @@ install(
         src/core/runtime/context.inl
         src/core/runtime/resource.h
         src/core/runtime/runtime.h
+        src/core/runtime/compose.h
         src/core/runtime/runtime.inl
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/legate/core/runtime)
 

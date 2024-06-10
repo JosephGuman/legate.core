@@ -39,6 +39,7 @@ class Region:
         handle: Optional[Any] = None,
         parent: Optional[Partition] = None,
         owned: bool = True,
+        uncoupled: bool = False,
     ) -> None:
         """
         A Region wraps a `legion_logical_region_t` in the Legion C API.
@@ -90,12 +91,13 @@ class Region:
                 )
         self.handle = handle
         self.owned = owned
+        self.uncoupled = uncoupled
         # Make this a WeakValueDicitionary so that entries can be
         # removed once the partitions are deleted
         self.children: Any = weakref.WeakValueDictionary()
 
     def __del__(self) -> None:
-        if self.owned and self.parent is None:
+        if self.owned and self.parent is None and not self.uncoupled:
             self.destroy(unordered=True)
 
     def same_handle(self, other: Region) -> bool:
@@ -158,6 +160,18 @@ class Region:
         if self.parent is not None:
             return self.parent.get_root()
         return self
+    
+    def extract_legion_resources(self):
+        """
+        Function to return a RegionField's legion resources to run arbitrary Legion code
+        outside of the Legate stack
+
+        Returns
+        -------
+        legion_logical_region_t,
+        permission owning legion_logical_region_t
+        """
+        return self.handle, self.get_root().handle
 
 
 class OutputRegion:

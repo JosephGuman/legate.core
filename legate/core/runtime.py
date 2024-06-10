@@ -1170,6 +1170,8 @@ class Runtime:
             ProcessorKind.CPU: self.core_library.LEGATE_CPU_VARIANT,
         }
 
+        self._legion_compose_mode = False
+
     @property
     def has_cpu_communicator(self) -> bool:
         return self._comm_manager.has_cpu_communicator
@@ -1250,6 +1252,21 @@ class Runtime:
 
     def get_all_annotations(self) -> str:
         return str(self.annotation)
+    
+    def set_legion_compose_mode(self):
+        if self._legion_compose_mode:
+            raise RuntimeError("Legate was set to compose mode, but was already in compose mode")
+        self._legion_compose_mode = True
+        self._default_window_size = self._window_size
+        self._window_size = 1
+        self.flush_scheduling_window()
+
+
+    def unset_legion_compose_mode(self):
+        if not self._legion_compose_mode:
+            raise RuntimeError("Legate was set off compose mode, but was already not in compose mode")
+        self._legion_compose_mode = False
+        self._window_size = self._default_window_size
 
     @property
     def provenance(self) -> Optional[str]:
@@ -1595,6 +1612,38 @@ class Runtime:
             shape=shape,
             ndim=ndim,
         )
+    
+    def wrap_region_field(
+        self,
+        field_id_t,
+        logical_region_t,
+        permission_owning_logical_region_t,
+        dtype: ty.Dtype,
+    ):
+        """
+        Create Legate state storing objects separate from the primary legate runtime 
+        for garbage collection purposes.
+        At Present not doing anything with permission_owning_logical_region_t, but
+        the easiest thing to do would be to wrap a Store around it as a parent if 
+        needed and leave it to the garbage collector to worry about.
+        """
+        from .store import RegionField
+
+        indexSpace = IndexSpace(self.legion_context, self.legion_runtime, logical_region_t.index_space, owned=True, uncoupled=True)
+        fieldSpace = FieldSpace(self.legion_context, self.legion_runtime, logical_region_t.field_space, owned=True, uncoupled=True)
+        shape = Shape(ispace=indexSpace)
+
+        region = Region(self.legion_context, runtime, indexSpace, fieldSpace, logical_region_t, owned=True, uncoupled=True)
+
+        regionField = RegionField.create(region, field_id_t, dtype.size, shape, uncoupled=True)
+
+        store = self.create_store(
+            dtype,
+            shape=shape,
+            data=regionField
+        )
+
+        return store
 
     def create_manual_task(
         self,

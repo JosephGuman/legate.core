@@ -42,6 +42,34 @@ cdef extern from "core/runtime/runtime.h" namespace "legate" nogil:
         Runtime* get_runtime()
         LibraryContext* find_library(string, bool)
 
+cdef extern from "core/runtime/compose.h" namespace "Legion" nogil:
+    cdef cppclass ComposeClassC:
+        @staticmethod
+        int returnFour()
+        @staticmethod
+        int registerFill()
+        @staticmethod
+        int registerPrint()
+        @staticmethod
+        void newRegisterMapper(int)
+        @staticmethod
+        int getID()
+        @staticmethod
+        int registerFake()
+
+cdef class ComposeClass:
+    def returnFour(self) -> int:
+        return ComposeClassC.returnFour()
+    def registerFill(self):
+        return ComposeClassC.registerFill()
+    def registerPrint(self):
+        return ComposeClassC.registerPrint()
+    def registerMapper(self, int node_count):
+        ComposeClassC.newRegisterMapper(node_count)
+    def getID(self):
+        return ComposeClassC.getID()
+    def registerFake(self):
+        return ComposeClassC.registerFake()
 
 cdef class CppTaskInfo:
     cdef const TaskInfo* _task_info

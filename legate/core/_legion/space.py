@@ -38,6 +38,7 @@ class IndexSpace:
         handle: Any,
         parent: Optional[IndexPartition] = None,
         owned: bool = True,
+        uncoupled: bool = False,
     ) -> None:
         """
         An IndexSpace object wraps a `legion_index_space_t` in the Legion C
@@ -66,6 +67,7 @@ class IndexSpace:
         self.handle = handle
         self.children: Union[set[IndexPartition], None] = None
         self.owned = owned
+        self.uncoupled = uncoupled
         self._domain: Optional[Domain] = None
         if owned and self.parent is not None and not self.parent.owned:
             raise ValueError(
@@ -76,7 +78,7 @@ class IndexSpace:
     def __del__(self) -> None:
         # We only need to delete top-level index spaces
         # Ignore any deletions though that occur after the task is done
-        if self.owned and self.parent is None:
+        if self.owned and self.parent is None and not self.uncoupled:
             self.destroy(unordered=True)
 
     def _can_delete(self) -> bool:
@@ -188,6 +190,7 @@ class FieldSpace:
         runtime: legion.legion_runtime_t,
         handle: Optional[Any] = None,
         owned: bool = True,
+        uncoupled: bool = False,
     ) -> None:
         """
         A FieldSpace wraps a `legion_field_space_t` in the Legion C API.
@@ -219,10 +222,11 @@ class FieldSpace:
             self.alloc = None
         self.fields: dict[int, Any] = dict()
         self.owned = owned
+        self.uncoupled = uncoupled
 
     def __del__(self) -> None:
         # Only delete this if the task is still executing otherwise we leak it
-        if self.owned:
+        if self.owned and not self.uncoupled:
             self.destroy(unordered=True)
 
     @property

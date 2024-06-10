@@ -75,12 +75,14 @@ class Field:
         field_id: int,
         field_size: int,
         shape: Shape,
+        uncoupled: bool = False,
     ) -> None:
         self.region = region
         self.field_id = field_id
         self.field_size = field_size
         self.shape = shape
         self.detach_future: Optional[Future] = None
+        self.uncoupled = uncoupled
 
     def add_detach_future(self, future: Future) -> None:
         self.detach_future = future
@@ -90,13 +92,14 @@ class Field:
 
     def __del__(self) -> None:
         # Return our field back to the runtime
-        runtime.free_field(
-            self.region,
-            self.field_id,
-            self.field_size,
-            self.shape,
-            self.detach_future,
-        )
+        if not self.uncoupled:
+            runtime.free_field(
+                self.region,
+                self.field_id,
+                self.field_size,
+                self.shape,
+                self.detach_future,
+            )
 
 
 # A region field holds a reference to a field in a logical region
@@ -130,9 +133,9 @@ class RegionField:
 
     @staticmethod
     def create(
-        region: Region, field_id: int, field_size: int, shape: Shape
+        region: Region, field_id: int, field_size: int, shape: Shape, uncoupled: bool = False
     ) -> RegionField:
-        field = Field(region, field_id, field_size, shape)
+        field = Field(region, field_id, field_size, shape, uncoupled)
         return RegionField(region, field, shape)
 
     def same_handle(self, other: Any) -> bool:
@@ -150,6 +153,23 @@ class RegionField:
             f"fs: {self.region.handle.field_space.id}, "
             f"fid: {self.field.field_id})"
         )
+    
+    def extract_legion_resources(self):
+        """
+        Function to return a RegionField's legion resources to run arbitrary Legion code
+        outside of the Legate stack
+
+        Returns
+        -------
+        legion_index_space_t,
+        legion_field_space_t,
+        legion_field_id_t,
+        legion_logical_region_t,
+        permission owning legion_logical_region_t
+        """
+
+        logical_region, parent_logical_region = self.region.extract_legion_resources()
+        return self.field.field_id, logical_region, parent_logical_region
 
     def attach_external_allocation(
         self, alloc: Attachable, share: bool
@@ -677,6 +697,30 @@ class Storage:
                 lhs.offsets, lhs.extents, rhs.offsets, rhs.extents
             )
         )
+    
+    def extract_legion_resources(self):
+        """
+        Function to return a Storage's legion resources to run arbitrary Legion code
+        outside of the Legate stack
+
+        Returns
+        -------
+        legion_field_id_t,
+        legion_logical_region_t,
+        permission owning legion_logical_region_t
+        """
+        if isinstance(self.data, Future):
+            raise TypeError("Extract Futures with extract_future")
+        elif isinstance(self.data, RegionField):
+            return self.data.extract_legion_resources()
+        else:
+            raise TypeError("Should this happen? Maybe a FutureMap")
+        
+    def extract_future(self):
+        if self.kind is not Future:
+            raise TypeError("Storage is not backed by a Future")
+        return self.data.extract_future_handle()
+
 
     def attach_external_allocation(
         self, alloc: Attachable, share: bool
@@ -1089,6 +1133,25 @@ class Store:
             "data": {LegateField("store", self.type): array},
         }
         return result
+    
+    def extract_legion_resources(self):
+        """
+        Function to return a Store's legion resources to run arbitrary Legion code
+        outside of the Legate stack
+
+        Returns
+        -------
+        legion_field_id_t,
+        legion_logical_region_t,
+        permission owning legion_logical_region_t
+        """
+        return self._storage.extract_legion_resources()
+    
+    def extract_future(self):
+        if(self.kind is not Future):
+            raise ValueError("Store is not backed by a future")
+        return self.storage.extract_future()
+
 
     def attach_external_allocation(
         self, alloc: Attachable, share: bool
@@ -1568,6 +1631,23 @@ class Store:
         buf.pack_32bit_int(self.ndim)
         self.type.serialize(buf)
         self._transform.serialize(buf)
+
+    def get_partition_handle(self, return_base = False):
+        runtime.flush_scheduling_window()
+
+        base = runtime.partition_manager.find_store_key_partition(
+            self._unique_id, self.find_restrictions()
+        )
+
+        handle, has = runtime.partition_manager.find_legion_partition(
+            self._storage._unique_id,
+            base
+        )
+
+        handle = handle.handle if has else None
+        if return_base:
+            return handle, base
+        return handle
 
     def get_key_partition(self) -> Optional[PartitionBase]:
         """

@@ -112,6 +112,11 @@ class Future:
         )
         self._type = type
 
+    def extract_future(self):
+        if self.handle is None:
+            raise ValueError("Future object is empty")
+        return self.handle
+
     @classmethod
     def from_buffer(
         cls,
