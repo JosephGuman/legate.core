@@ -1171,6 +1171,7 @@ class Runtime:
         }
 
         self._legion_compose_mode = False
+        self._frozen = False
 
     @property
     def has_cpu_communicator(self) -> bool:
@@ -1252,6 +1253,18 @@ class Runtime:
 
     def get_all_annotations(self) -> str:
         return str(self.annotation)
+    
+    def legate_freeze(self):
+        if self._frozen:
+            raise RuntimeError("Legate was set to frozen, but was already frozen")
+        self.flush_scheduling_window()
+        self._frozen = True
+
+    def legate_unfreeze(self):
+        if not self._frozen:
+            raise RuntimeError("Legate was set to unfrozen, but was already unfrozen")
+        self._frozen = False
+
     
     def set_legion_compose_mode(self):
         if self._legion_compose_mode:
@@ -1393,6 +1406,9 @@ class Runtime:
         return op.launch(self.legion_runtime, self.legion_context)
 
     def _schedule(self, ops: List[Operation]) -> None:
+        if self._frozen:
+            raise RuntimeError("An operation was scheduled, but Legate has been frozen")
+        
         from .solver import Partitioner
 
         # TODO: For now we run the partitioner for each operation separately.
