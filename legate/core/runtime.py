@@ -1651,7 +1651,7 @@ class Runtime:
         fieldSpace = FieldSpace(self.legion_context, self.legion_runtime, logical_region_t.field_space, owned=True, uncoupled=True)
         shape = Shape(ispace=indexSpace)
 
-        region = Region(self.legion_context, runtime, indexSpace, fieldSpace, logical_region_t, owned=True, uncoupled=True)
+        region = Region(self.legion_context, self.legion_runtime, indexSpace, fieldSpace, logical_region_t, owned=True, uncoupled=True)
 
         regionField = RegionField.create(region, field_id_t, dtype.size, shape, uncoupled=True)
 
