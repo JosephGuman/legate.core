@@ -1435,6 +1435,8 @@ class Runtime:
         self._schedule(ops)
 
     def submit(self, op: Operation) -> None:
+        if self._frozen:
+            raise RuntimeError("An operation was submitted, but Legate has been frozen")
         if op.can_raise_exception and self._precise_exception_trace:
             op.capture_traceback()
         self._outstanding_ops.append(op)
